@@ -37,6 +37,7 @@ type MepData = {
   usd_bid: number
   usd_ask: number
   panel: string
+  type: 'mep'
 }
 
 const formatNumber = (num: number) => {
@@ -44,8 +45,10 @@ const formatNumber = (num: number) => {
 };
 
 const formatPercentage = (num: number) => {
-  return num.toFixed(2) + '%';
+  return `${num >= 0 ? '+' : ''}${num.toFixed(2)}%`;
 };
+
+type SortableFields = keyof Pick<MarketData, 'symbol' | 'px_bid' | 'px_ask' | 'c' | 'pct_change'>;
 
 export function MarketDashboard() {
   const [stocks, setStocks] = useState<MarketData[]>([])
@@ -54,7 +57,7 @@ export function MarketDashboard() {
   const [mep, setMep] = useState<MepData[]>([])
   const [favorites, setFavorites] = useState<(MarketData | MepData)[]>([])
   const [searchTerm, setSearchTerm] = useState('')
-  const [sortBy, setSortBy] = useState('symbol')
+  const [sortBy, setSortBy] = useState<SortableFields>('symbol')
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc')
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date())
   const [isRefreshing, setIsRefreshing] = useState(false)
@@ -64,10 +67,22 @@ export function MarketDashboard() {
     setIsRefreshing(true)
     try {
       const [stocksRes, bondsRes, onsRes, mepRes] = await Promise.all([
-        fetch('https://data-912-proxy.ferminrp.workers.dev/live/arg_stocks'),
-        fetch('https://data-912-proxy.ferminrp.workers.dev/live/arg_bonds'),
-        fetch('https://data-912-proxy.ferminrp.workers.dev/live/arg_corp'),
-        fetch('https://data-912-proxy.ferminrp.workers.dev/live/mep')
+        fetch('https://data-912-proxy.ferminrp.workers.dev/live/arg_stocks').then(res => {
+          if (!res.ok) throw new Error('Failed to fetch stocks')
+          return res
+        }),
+        fetch('https://data-912-proxy.ferminrp.workers.dev/live/arg_bonds').then(res => {
+          if (!res.ok) throw new Error('Failed to fetch bonds')
+          return res
+        }),
+        fetch('https://data-912-proxy.ferminrp.workers.dev/live/arg_corp').then(res => {
+          if (!res.ok) throw new Error('Failed to fetch ons')
+          return res
+        }),
+        fetch('https://data-912-proxy.ferminrp.workers.dev/live/mep').then(res => {
+          if (!res.ok) throw new Error('Failed to fetch mep')
+          return res
+        })
       ])
 
       const [stocksData, bondsData, onsData, mepData] = await Promise.all([
@@ -77,10 +92,10 @@ export function MarketDashboard() {
         mepRes.json()
       ])
 
-      setStocks(stocksData.map((item: any) => ({ ...item, type: 'stock' })))
-      setBonds(bondsData.map((item: any) => ({ ...item, type: 'bond' })))
-      setOns(onsData.map((item: any) => ({ ...item, type: 'on' })))
-      setMep(mepData)
+      setStocks(stocksData.map((item: MarketData) => ({ ...item, type: 'stock' })))
+      setBonds(bondsData.map((item: MarketData) => ({ ...item, type: 'bond' })))
+      setOns(onsData.map((item: MarketData) => ({ ...item, type: 'on' })))
+      setMep(mepData.map((item: MepData) => ({ ...item, type: 'mep' })))
       setLastUpdate(new Date())
     } catch (error) {
       console.error('Error fetching data:', error)
@@ -117,14 +132,16 @@ export function MarketDashboard() {
 
   const filterAndSortData = useCallback((data: MarketData[], key = 'symbol') => {
     const filtered = data.filter(item =>
-      item[key]?.toString().toLowerCase().includes(searchTerm.toLowerCase())
+      item[key as keyof MarketData]?.toString().toLowerCase().includes(searchTerm.toLowerCase())
     )
 
     return [...filtered].sort((a, b) => {
-      if (a[sortBy] < b[sortBy]) return sortOrder === 'asc' ? -1 : 1
-      if (a[sortBy] > b[sortBy]) return sortOrder === 'asc' ? 1 : -1
-      return 0
-    })
+      const aValue = a[sortBy as keyof MarketData] ?? '';
+      const bValue = b[sortBy as keyof MarketData] ?? '';
+      if (aValue < bValue) return sortOrder === 'asc' ? -1 : 1;
+      if (aValue > bValue) return sortOrder === 'asc' ? 1 : -1;
+      return 0;
+    });
   }, [searchTerm, sortBy, sortOrder])
 
   const filterAndSortMepData = useCallback((data: MepData[]) => {
@@ -365,14 +382,14 @@ export function MarketDashboard() {
                 <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400" />
                 <Input
                   type="text"
-                  placeholder="Buscar por símbolo"
+                  placeholder="Buscar por sbolo"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="pl-10 bg-gray-800 text-white border-gray-700"
                 />
               </div>
               <div className="flex items-center gap-2">
-                <Select value={sortBy} onValueChange={setSortBy}>
+                <Select value={sortBy} onValueChange={(value: "symbol" | "px_bid" | "px_ask" | "c" | "pct_change") => setSortBy(value)}>
                   <SelectTrigger className="w-[180px] bg-gray-900 text-white border-gray-700 hover:bg-gray-800">
                     <SelectValue placeholder="Ordenar por" />
                   </SelectTrigger>
