@@ -762,7 +762,13 @@ export function MarketDashboard() {
               stocks={stocks}
               bonds={bonds}
               on={ons}
-              mep={mep}
+              mep={mep.map(m => ({
+                ticker: m.ticker,
+                bid: m.bid,
+                ask: m.ask,
+                c: m.close,
+                type: 'mep' as const
+              }))}
             />
           </TabsContent>
 

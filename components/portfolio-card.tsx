@@ -30,15 +30,28 @@ interface Totals {
   usd: number;
 }
 
-interface Asset {
-  symbol: string;
+interface BaseAsset {
   priceARS?: number;
   priceUSD?: number;
   px_bid?: number;
   px_ask?: number;
+  bid?: number;     
+  ask?: number;     
   c?: number;
   type?: 'stock' | 'bond' | 'on' | 'mep';
 }
+
+interface SymbolAsset extends BaseAsset {
+  symbol: string;
+  ticker?: never;
+}
+
+interface TickerAsset extends BaseAsset {
+  ticker: string;
+  symbol?: never;
+}
+
+type Asset = SymbolAsset | TickerAsset;
 
 interface PortfolioCardProps {
   stocks: Asset[];
@@ -97,14 +110,14 @@ export function PortfolioCard({ stocks, bonds, on, mep }: PortfolioCardProps) {
   const addToPortfolio = () => {
     if (!selectedSymbol || !quantity) return;
     
-    const asset = allAssets.find(a => a.symbol === selectedSymbol);
+    const asset = allAssets.find(a => 'symbol' in a ? a.symbol === selectedSymbol : a.ticker === selectedSymbol);
     if (!asset) return;
 
     const priceUSD = findUSDPrice(selectedSymbol);
     const newItem: PortfolioItem = {
       symbol: selectedSymbol,
       quantity: Number(quantity),
-      priceARS: asset.c || asset.px_ask || asset.px_bid || 0,
+      priceARS: asset.c || asset.px_ask || asset.px_bid || asset.ask || asset.bid || 0,
       priceUSD: priceUSD,
       type: asset.type || 'stock',
       c: asset.c
@@ -135,7 +148,7 @@ export function PortfolioCard({ stocks, bonds, on, mep }: PortfolioCardProps) {
                   className="w-[250px] justify-between bg-gray-800 border-gray-700 text-white hover:bg-gray-700"
                 >
                   {selectedSymbol
-                    ? allAssets.find((asset) => asset.symbol === selectedSymbol)?.symbol
+                    ? allAssets.find((asset) => 'symbol' in asset ? asset.symbol === selectedSymbol : asset.ticker === selectedSymbol)?.symbol
                     : "Buscar activo..."}
                   <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                 </Button>
@@ -148,12 +161,12 @@ export function PortfolioCard({ stocks, bonds, on, mep }: PortfolioCardProps) {
                     if (e.key === 'Enter') {
                       const firstMatch = allAssets
                         .find(asset => 
-                          !asset.symbol.endsWith('D') && 
-                          !asset.symbol.endsWith('C') && 
-                          asset.symbol.toLowerCase().includes(searchValue.toLowerCase())
+                          !('symbol' in asset && asset.symbol?.endsWith('D')) && 
+                          !('symbol' in asset && asset.symbol?.endsWith('C')) && 
+                          (('symbol' in asset && asset.symbol?.toLowerCase().includes(searchValue.toLowerCase())) || ('ticker' in asset && asset.ticker?.toLowerCase().includes(searchValue.toLowerCase())))
                         );
                       if (firstMatch) {
-                        setSelectedSymbol(firstMatch.symbol);
+                        setSelectedSymbol('symbol' in firstMatch ? firstMatch.symbol : firstMatch.ticker);
                         setOpen(false);
                       }
                     }
@@ -172,7 +185,7 @@ export function PortfolioCard({ stocks, bonds, on, mep }: PortfolioCardProps) {
                       <CommandGroup heading="Acciones" className="text-gray-300 font-medium">
                         {stocks
                           .filter(asset => 
-                            typeof asset.symbol === 'string' && 
+                            'symbol' in asset && 
                             !asset.symbol.toString().endsWith('D') &&
                             asset.symbol.toLowerCase().includes(searchValue.toLowerCase())
                           )
@@ -196,7 +209,7 @@ export function PortfolioCard({ stocks, bonds, on, mep }: PortfolioCardProps) {
                       <CommandGroup heading="Bonos" className="text-gray-300 font-medium">
                         {bonds
                           .filter(asset => 
-                            typeof asset.symbol === 'string' && 
+                            'symbol' in asset && 
                             !asset.symbol.toString().endsWith('D') &&
                             !asset.symbol.toString().endsWith('C') &&
                             asset.symbol.toLowerCase().includes(searchValue.toLowerCase())
@@ -221,7 +234,7 @@ export function PortfolioCard({ stocks, bonds, on, mep }: PortfolioCardProps) {
                       <CommandGroup heading="ONs" className="text-gray-300 font-medium">
                         {on
                           .filter(asset => 
-                            typeof asset.symbol === 'string' && 
+                            'symbol' in asset && 
                             !asset.symbol.toString().endsWith('D') &&
                             asset.symbol.toLowerCase().includes(searchValue.toLowerCase())
                           )
@@ -235,6 +248,29 @@ export function PortfolioCard({ stocks, bonds, on, mep }: PortfolioCardProps) {
                               className="w-full text-left text-white hover:bg-blue-600/50 cursor-pointer rounded px-2 py-1.5 text-sm font-medium data-[state=selected]:bg-blue-600"
                             >
                               {asset.symbol}
+                            </button>
+                          ))}
+                      </CommandGroup>
+                    )}
+                    
+                    {/* MEP */}
+                    {mep.length > 0 && (
+                      <CommandGroup heading="MEP" className="text-gray-300 font-medium">
+                        {mep
+                          .filter(asset => 
+                            'ticker' in asset && 
+                            asset.ticker.toLowerCase().includes(searchValue.toLowerCase())
+                          )
+                          .map((asset) => (
+                            <button
+                              key={asset.ticker}
+                              onClick={() => {
+                                setSelectedSymbol(asset.ticker);
+                                setOpen(false);
+                              }}
+                              className="w-full text-left text-white hover:bg-blue-600/50 cursor-pointer rounded px-2 py-1.5 text-sm font-medium data-[state=selected]:bg-blue-600"
+                            >
+                              {asset.ticker}
                             </button>
                           ))}
                       </CommandGroup>
