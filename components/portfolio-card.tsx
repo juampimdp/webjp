@@ -75,13 +75,19 @@ export function PortfolioCard({ stocks, bonds, on, mep }: PortfolioCardProps) {
     ...mep.map(m => ({ ...m, type: 'mep' as const }))
   ];
 
-  const findUSDPrice = (symbol: string): number => {
-    if (typeof symbol !== 'string' || symbol.toString().endsWith('D')) return 0;
-    const usdSymbol = symbol.toString() + 'D';
-    // Buscar en bonos y ONs
-    const usdPrice = bonds.find(b => b.symbol === usdSymbol)?.c || 
-                    on.find(o => o.symbol === usdSymbol)?.c || 0;
-    return usdPrice;
+  const findUSDPrice = (identifier: string): number => {
+    if (!identifier || identifier.endsWith('D')) return 0;
+    const usdSymbol = identifier + 'D';
+    
+    // Buscar en bonos y ONs que usan symbol
+    const bondWithUSD = bonds.find(b => 'symbol' in b && b.symbol === usdSymbol);
+    const onWithUSD = on.find(o => 'symbol' in o && o.symbol === usdSymbol);
+    
+    return bondWithUSD?.c || onWithUSD?.c || 0;
+  };
+
+  const getAssetIdentifier = (asset: Asset): string => {
+    return 'symbol' in asset ? asset.symbol : asset.ticker;
   };
 
   const calculateItemTotal = (item: PortfolioItem): Totals => {
@@ -110,15 +116,22 @@ export function PortfolioCard({ stocks, bonds, on, mep }: PortfolioCardProps) {
   const addToPortfolio = () => {
     if (!selectedSymbol || !quantity) return;
     
-    const asset = allAssets.find(a => 'symbol' in a ? a.symbol === selectedSymbol : a.ticker === selectedSymbol);
+    const asset = allAssets.find(a => getAssetIdentifier(a) === selectedSymbol);
     if (!asset) return;
 
     const priceUSD = findUSDPrice(selectedSymbol);
+    const priceARS = asset.c || 
+                    asset.px_ask || 
+                    asset.px_bid || 
+                    asset.ask || 
+                    asset.bid || 
+                    0;
+
     const newItem: PortfolioItem = {
       symbol: selectedSymbol,
       quantity: Number(quantity),
-      priceARS: asset.c || asset.px_ask || asset.px_bid || asset.ask || asset.bid || 0,
-      priceUSD: priceUSD,
+      priceARS: asset.type === 'bond' || asset.type === 'on' ? priceARS / 100 : priceARS,
+      priceUSD: asset.type === 'bond' || asset.type === 'on' ? priceUSD / 100 : priceUSD,
       type: asset.type || 'stock',
       c: asset.c
     };
@@ -148,7 +161,8 @@ export function PortfolioCard({ stocks, bonds, on, mep }: PortfolioCardProps) {
                   className="w-[250px] justify-between bg-gray-800 border-gray-700 text-white hover:bg-gray-700"
                 >
                   {selectedSymbol
-                    ? allAssets.find((asset) => 'symbol' in asset ? asset.symbol === selectedSymbol : asset.ticker === selectedSymbol)?.symbol
+                    ? allAssets.find((asset) => getAssetIdentifier(asset) === selectedSymbol)
+                        ?.symbol || selectedSymbol
                     : "Buscar activo..."}
                   <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                 </Button>
@@ -160,13 +174,18 @@ export function PortfolioCard({ stocks, bonds, on, mep }: PortfolioCardProps) {
                   onKeyDown={(e: React.KeyboardEvent) => {
                     if (e.key === 'Enter') {
                       const firstMatch = allAssets
-                        .find(asset => 
-                          !('symbol' in asset && asset.symbol?.endsWith('D')) && 
-                          !('symbol' in asset && asset.symbol?.endsWith('C')) && 
-                          (('symbol' in asset && asset.symbol?.toLowerCase().includes(searchValue.toLowerCase())) || ('ticker' in asset && asset.ticker?.toLowerCase().includes(searchValue.toLowerCase())))
-                        );
+                        .find(asset => {
+                          const identifier = getAssetIdentifier(asset);
+                          const isSymbolAsset = 'symbol' in asset;
+                          
+                          return !isSymbolAsset || 
+                                 (!asset.symbol?.endsWith('D') && !asset.symbol?.endsWith('C')) &&
+                                 identifier.toLowerCase().includes(searchValue.toLowerCase());
+                        });
+
                       if (firstMatch) {
-                        setSelectedSymbol('symbol' in firstMatch ? firstMatch.symbol : firstMatch.ticker);
+                        const identifier = getAssetIdentifier(firstMatch);
+                        setSelectedSymbol(identifier);
                         setOpen(false);
                       }
                     }
@@ -259,14 +278,17 @@ export function PortfolioCard({ stocks, bonds, on, mep }: PortfolioCardProps) {
                         {mep
                           .filter(asset => 
                             'ticker' in asset && 
+                            asset.ticker && 
                             asset.ticker.toLowerCase().includes(searchValue.toLowerCase())
                           )
                           .map((asset) => (
                             <button
                               key={asset.ticker}
                               onClick={() => {
-                                setSelectedSymbol(asset.ticker);
-                                setOpen(false);
+                                if (asset.ticker) {
+                                  setSelectedSymbol(asset.ticker);
+                                  setOpen(false);
+                                }
                               }}
                               className="w-full text-left text-white hover:bg-blue-600/50 cursor-pointer rounded px-2 py-1.5 text-sm font-medium data-[state=selected]:bg-blue-600"
                             >

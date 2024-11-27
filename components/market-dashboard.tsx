@@ -759,9 +759,27 @@ export function MarketDashboard() {
 
           <TabsContent value="portfolio">
             <PortfolioCard 
-              stocks={stocks}
-              bonds={bonds}
-              on={ons}
+              stocks={stocks.map(s => ({
+                symbol: s.symbol,
+                px_bid: s.px_bid,
+                px_ask: s.px_ask,
+                c: s.c,
+                type: 'stock' as const
+              }))}
+              bonds={bonds.map(b => ({
+                symbol: b.symbol,
+                px_bid: b.px_bid,
+                px_ask: b.px_ask,
+                c: b.c,
+                type: 'bond' as const
+              }))}
+              on={ons.map(o => ({
+                symbol: o.symbol,
+                px_bid: o.px_bid,
+                px_ask: o.px_ask,
+                c: o.c,
+                type: 'on' as const
+              }))}
               mep={mep.map(m => ({
                 ticker: m.ticker,
                 bid: m.bid,
