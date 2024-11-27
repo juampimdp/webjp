@@ -9,7 +9,6 @@
 
 Market Dashboard es una aplicación web profesional diseñada para el seguimiento y análisis de instrumentos financieros en el mercado argentino. Proporciona información en tiempo real sobre Acciones, Bonos, Obligaciones Negociables (ONs) y operaciones MEP, ofreciendo una interfaz intuitiva y eficiente para traders e inversores.
 
-![Dashboard Preview](public/dashboard-preview.png)
 
 ## Características Principales
 
