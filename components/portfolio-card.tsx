@@ -16,6 +16,32 @@ import {
 } from "@/components/ui/popover";
 import { Plus, Minus, ChevronsUpDown } from "lucide-react";
 
+interface BaseAsset {
+  priceARS?: number;
+  priceUSD?: number;
+  px_bid?: number;
+  px_ask?: number;
+  bid?: number;     
+  ask?: number;     
+  c?: number;
+}
+
+// Assets que usan symbol (stocks, bonds, ONs)
+interface SymbolAsset extends BaseAsset {
+  type: 'stock' | 'bond' | 'on';
+  symbol: string;
+  ticker?: never;
+}
+
+// Assets que usan ticker (MEP)
+interface TickerAsset extends BaseAsset {
+  type: 'mep';
+  ticker: string;
+  symbol?: never;
+}
+
+type Asset = SymbolAsset | TickerAsset;
+
 interface PortfolioItem {
   symbol: string;
   quantity: number;
@@ -30,36 +56,11 @@ interface Totals {
   usd: number;
 }
 
-interface BaseAsset {
-  priceARS?: number;
-  priceUSD?: number;
-  px_bid?: number;
-  px_ask?: number;
-  bid?: number;     
-  ask?: number;     
-  c?: number;
-  type?: 'stock' | 'bond' | 'on' | 'mep';
-}
-
-interface SymbolAsset extends BaseAsset {
-  symbol: string;
-  type: 'stock' | 'bond' | 'on';  
-  ticker?: never;  
-}
-
-interface TickerAsset extends BaseAsset {
-  ticker: string;
-  type: 'mep';  
-  symbol?: never;  
-}
-
-type Asset = SymbolAsset | TickerAsset;
-
 interface PortfolioCardProps {
-  stocks: Asset[];
-  bonds: Asset[];
-  on: Asset[];
-  mep: Asset[];
+  stocks: SymbolAsset[];  
+  bonds: SymbolAsset[];   
+  on: SymbolAsset[];
+  mep: TickerAsset[];
 }
 
 export function PortfolioCard({ stocks, bonds, on, mep }: PortfolioCardProps) {
@@ -71,10 +72,10 @@ export function PortfolioCard({ stocks, bonds, on, mep }: PortfolioCardProps) {
 
   // Combinar todos los activos en una lista
   const allAssets: Asset[] = [
-    ...stocks.map(s => ({ ...s, type: 'stock' as const })),
-    ...bonds.map(b => ({ ...b, type: 'bond' as const })),
-    ...on.map(o => ({ ...o, type: 'on' as const })),
-    ...mep.map(m => ({ ...m, type: 'mep' as const }))
+    ...stocks,  
+    ...bonds,
+    ...on,
+    ...mep
   ];
 
   const findUSDPrice = (identifier: string): number => {
@@ -82,17 +83,14 @@ export function PortfolioCard({ stocks, bonds, on, mep }: PortfolioCardProps) {
     const usdSymbol = identifier + 'D';
     
     // Buscar en bonos y ONs que usan symbol
-    const bondWithUSD = bonds.find(b => 'symbol' in b && b.symbol === usdSymbol);
-    const onWithUSD = on.find(o => 'symbol' in o && o.symbol === usdSymbol);
+    const bondWithUSD = bonds.find(b => b.symbol === usdSymbol);
+    const onWithUSD = on.find(o => o.symbol === usdSymbol);
     
     return bondWithUSD?.c || onWithUSD?.c || 0;
   };
 
   const getAssetIdentifier = (asset: Asset): string => {
-    if ('symbol' in asset) {
-      return asset.symbol;  
-    }
-    return asset.ticker;    
+    return asset.type === 'mep' ? asset.ticker : asset.symbol;
   };
 
   const calculateItemTotal = (item: PortfolioItem): Totals => {
