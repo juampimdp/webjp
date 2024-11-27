@@ -28,12 +28,14 @@ interface BaseAsset {
 
 interface SymbolAsset extends BaseAsset {
   type: 'stock' | 'bond' | 'on';
-  symbol: string;  
+  symbol: string;
+  ticker?: never;
 }
 
 interface TickerAsset extends BaseAsset {
   type: 'mep';
-  ticker: string;  
+  ticker: string;
+  symbol?: never;
 }
 
 type Asset = SymbolAsset | TickerAsset;
@@ -73,8 +75,17 @@ export function PortfolioCard({ stocks, bonds, on, mep }: PortfolioCardProps) {
     ...mep
   ];
 
-  const getAssetIdentifier = (asset: Asset): string => {
+  const getDisplayIdentifier = (asset: Asset): string => {
     return asset.type === 'mep' ? asset.ticker : asset.symbol;
+  };
+
+  const findAssetByIdentifier = (identifier: string): Asset | undefined => {
+    return allAssets.find(asset => getDisplayIdentifier(asset) === identifier);
+  };
+
+  const getDisplayText = (identifier: string): string => {
+    const asset = findAssetByIdentifier(identifier);
+    return asset ? getDisplayIdentifier(asset) : identifier;
   };
 
   const isSymbolAsset = (asset: Asset): asset is SymbolAsset => {
@@ -86,7 +97,7 @@ export function PortfolioCard({ stocks, bonds, on, mep }: PortfolioCardProps) {
   };
 
   const filterAsset = (asset: Asset): boolean => {
-    const identifier = getAssetIdentifier(asset);
+    const identifier = getDisplayIdentifier(asset);
     if (isSymbolAsset(asset)) {
       return !shouldExcludeAsset(identifier) && 
              identifier.toLowerCase().includes(searchValue.toLowerCase());
@@ -130,7 +141,7 @@ export function PortfolioCard({ stocks, bonds, on, mep }: PortfolioCardProps) {
   const addToPortfolio = () => {
     if (!selectedSymbol || !quantity) return;
     
-    const asset = allAssets.find(a => getAssetIdentifier(a) === selectedSymbol);
+    const asset = findAssetByIdentifier(selectedSymbol);
     if (!asset) return;
 
     const priceUSD = findUSDPrice(selectedSymbol);
@@ -174,10 +185,7 @@ export function PortfolioCard({ stocks, bonds, on, mep }: PortfolioCardProps) {
                   aria-expanded={open}
                   className="w-[250px] justify-between bg-gray-800 border-gray-700 text-white hover:bg-gray-700"
                 >
-                  {selectedSymbol
-                    ? allAssets.find((asset) => getAssetIdentifier(asset) === selectedSymbol)
-                        ?.symbol || selectedSymbol
-                    : "Buscar activo..."}
+                  {selectedSymbol ? getDisplayText(selectedSymbol) : "Buscar activo..."}
                   <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                 </Button>
               </PopoverTrigger>
@@ -189,7 +197,7 @@ export function PortfolioCard({ stocks, bonds, on, mep }: PortfolioCardProps) {
                     if (e.key === 'Enter') {
                       const firstMatch = allAssets.find(filterAsset);
                       if (firstMatch) {
-                        setSelectedSymbol(getAssetIdentifier(firstMatch));
+                        setSelectedSymbol(getDisplayIdentifier(firstMatch));
                         setOpen(false);
                       }
                     }
@@ -208,14 +216,14 @@ export function PortfolioCard({ stocks, bonds, on, mep }: PortfolioCardProps) {
                       <CommandGroup heading="Acciones" className="text-gray-300 font-medium">
                         {stocks.filter(filterAsset).map((asset) => (
                           <button
-                            key={getAssetIdentifier(asset)}
+                            key={getDisplayIdentifier(asset)}
                             onClick={() => {
-                              setSelectedSymbol(getAssetIdentifier(asset));
+                              setSelectedSymbol(getDisplayIdentifier(asset));
                               setOpen(false);
                             }}
                             className="w-full text-left text-white hover:bg-blue-600/50 cursor-pointer rounded px-2 py-1.5 text-sm font-medium data-[state=selected]:bg-blue-600"
                           >
-                            {getAssetIdentifier(asset)}
+                            {getDisplayIdentifier(asset)}
                           </button>
                         ))}
                       </CommandGroup>
@@ -226,14 +234,14 @@ export function PortfolioCard({ stocks, bonds, on, mep }: PortfolioCardProps) {
                       <CommandGroup heading="Bonos" className="text-gray-300 font-medium">
                         {bonds.filter(filterAsset).map((asset) => (
                           <button
-                            key={getAssetIdentifier(asset)}
+                            key={getDisplayIdentifier(asset)}
                             onClick={() => {
-                              setSelectedSymbol(getAssetIdentifier(asset));
+                              setSelectedSymbol(getDisplayIdentifier(asset));
                               setOpen(false);
                             }}
                             className="w-full text-left text-white hover:bg-blue-600/50 cursor-pointer rounded px-2 py-1.5 text-sm font-medium data-[state=selected]:bg-blue-600"
                           >
-                            {getAssetIdentifier(asset)}
+                            {getDisplayIdentifier(asset)}
                           </button>
                         ))}
                       </CommandGroup>
@@ -244,14 +252,14 @@ export function PortfolioCard({ stocks, bonds, on, mep }: PortfolioCardProps) {
                       <CommandGroup heading="ONs" className="text-gray-300 font-medium">
                         {on.filter(filterAsset).map((asset) => (
                           <button
-                            key={getAssetIdentifier(asset)}
+                            key={getDisplayIdentifier(asset)}
                             onClick={() => {
-                              setSelectedSymbol(getAssetIdentifier(asset));
+                              setSelectedSymbol(getDisplayIdentifier(asset));
                               setOpen(false);
                             }}
                             className="w-full text-left text-white hover:bg-blue-600/50 cursor-pointer rounded px-2 py-1.5 text-sm font-medium data-[state=selected]:bg-blue-600"
                           >
-                            {getAssetIdentifier(asset)}
+                            {getDisplayIdentifier(asset)}
                           </button>
                         ))}
                       </CommandGroup>
@@ -262,14 +270,14 @@ export function PortfolioCard({ stocks, bonds, on, mep }: PortfolioCardProps) {
                       <CommandGroup heading="MEP" className="text-gray-300 font-medium">
                         {mep.filter(filterAsset).map((asset) => (
                           <button
-                            key={getAssetIdentifier(asset)}
+                            key={getDisplayIdentifier(asset)}
                             onClick={() => {
-                              setSelectedSymbol(getAssetIdentifier(asset));
+                              setSelectedSymbol(getDisplayIdentifier(asset));
                               setOpen(false);
                             }}
                             className="w-full text-left text-white hover:bg-blue-600/50 cursor-pointer rounded px-2 py-1.5 text-sm font-medium data-[state=selected]:bg-blue-600"
                           >
-                            {getAssetIdentifier(asset)}
+                            {getDisplayIdentifier(asset)}
                           </button>
                         ))}
                       </CommandGroup>
