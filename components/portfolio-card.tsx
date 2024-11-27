@@ -77,30 +77,21 @@ export function PortfolioCard({ stocks, bonds, on, mep }: PortfolioCardProps) {
     return asset.type === 'mep' ? asset.ticker : asset.symbol;
   };
 
-  // Type guard para SymbolAsset
   const isSymbolAsset = (asset: Asset): asset is SymbolAsset => {
     return asset.type === 'stock' || asset.type === 'bond' || asset.type === 'on';
-  };
-
-  // Type guard para TickerAsset
-  const isTickerAsset = (asset: Asset): asset is TickerAsset => {
-    return asset.type === 'mep';
   };
 
   const shouldExcludeAsset = (identifier: string): boolean => {
     return identifier.endsWith('D') || identifier.endsWith('C');
   };
 
-  const matchesSearch = (identifier: string): boolean => {
-    return identifier.toLowerCase().includes(searchValue.toLowerCase());
-  };
-
   const filterAsset = (asset: Asset): boolean => {
     const identifier = getAssetIdentifier(asset);
     if (isSymbolAsset(asset)) {
-      return !shouldExcludeAsset(identifier) && matchesSearch(identifier);
+      return !shouldExcludeAsset(identifier) && 
+             identifier.toLowerCase().includes(searchValue.toLowerCase());
     }
-    return matchesSearch(identifier);
+    return identifier.toLowerCase().includes(searchValue.toLowerCase());
   };
 
   const findUSDPrice = (identifier: string): number => {
