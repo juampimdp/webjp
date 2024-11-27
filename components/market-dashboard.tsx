@@ -70,7 +70,7 @@ const formatCurrency = (value: number, currency: 'ARS' | 'USD') => {
 };
 
 const formatInputCurrency = (value: string): string => {
-  let number = value.replace(/\D/g, '');
+  const number = value.replace(/\D/g, '');
   const numberValue = Number(number);
   if (isNaN(numberValue)) return '';
   return new Intl.NumberFormat('es-AR', {
@@ -217,34 +217,28 @@ export function MarketDashboard() {
     setSortOrder(prevOrder => prevOrder === 'asc' ? 'desc' : 'asc')
   }, [])
 
-  const filterAndSortData = useCallback((data: MarketData[], key = 'symbol') => {
-    const filtered = data.filter(item =>
-      item[key as keyof MarketData]?.toString().toLowerCase().includes(searchTerm.toLowerCase())
-    )
+  const filterAndSortData = useCallback((data: MarketData[]) => {
+    return [...data]
+      .filter(item => item.symbol.toLowerCase().includes(searchTerm.toLowerCase()))
+      .sort((a, b) => {
+        const aValue = a[sortBy];
+        const bValue = b[sortBy];
+        
+        if (aValue === undefined || bValue === undefined) return 0;
+        
+        const comparison = aValue > bValue ? 1 : -1;
+        return sortOrder === 'asc' ? comparison : -comparison;
+      });
+  }, [searchTerm, sortBy, sortOrder]);
 
-    return [...filtered].sort((a, b) => {
-      const aValue = a[sortBy as keyof MarketData] ?? '';
-      const bValue = b[sortBy as keyof MarketData] ?? '';
-      if (aValue < bValue) return sortOrder === 'asc' ? -1 : 1;
-      if (aValue > bValue) return sortOrder === 'asc' ? 1 : -1;
-      return 0;
-    });
-  }, [searchTerm, sortBy, sortOrder])
-
-  const filterAndSortMepData = useCallback((data: MepData[]) => {
-    const filtered = data.filter(item =>
-      item.ticker.toLowerCase().includes(searchTerm.toLowerCase()) &&
-      item.panel === 'bonds'
-    )
-
-    return [...filtered].sort((a, b) => {
-      const aValue = a[sortBy as keyof MepData]
-      const bValue = b[sortBy as keyof MepData]
-      if (aValue < bValue) return sortOrder === 'asc' ? -1 : 1
-      if (aValue > bValue) return sortOrder === 'asc' ? 1 : -1
-      return 0
-    })
-  }, [searchTerm, sortBy, sortOrder])
+  const filterAndSortMep = useCallback((data: MepData[]) => {
+    return [...data]
+      .filter(item => item.ticker.toLowerCase().includes(searchTerm.toLowerCase()))
+      .sort((a, b) => {
+        const comparison = a.ticker > b.ticker ? 1 : -1;
+        return sortOrder === 'asc' ? comparison : -comparison;
+      });
+  }, [searchTerm, sortOrder]);
 
   const calculateMep = useCallback(() => {
     if (!mepCalculator.amount) return;
@@ -536,7 +530,7 @@ export function MarketDashboard() {
 
           <TabsContent value="mep">
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-              {mep.map((mepItem) => (
+              {filterAndSortMep(mep).map((mepItem) => (
                 <MepCard key={mepItem.ticker} item={mepItem} />
               ))}
             </div>
