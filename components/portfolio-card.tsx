@@ -21,7 +21,8 @@ interface PortfolioItem {
   quantity: number;
   priceARS: number;
   priceUSD: number;
-  type: string;
+  type: 'stock' | 'bond' | 'on' | 'mep';
+  c?: number;
 }
 
 interface Totals {
@@ -31,8 +32,10 @@ interface Totals {
 
 interface Asset {
   symbol: string;
-  priceARS: number;
-  priceUSD: number;
+  priceARS?: number;
+  priceUSD?: number;
+  px_bid?: number;
+  px_ask?: number;
   c?: number;
   type?: 'stock' | 'bond' | 'on' | 'mep';
 }
@@ -101,9 +104,10 @@ export function PortfolioCard({ stocks, bonds, on, mep }: PortfolioCardProps) {
     const newItem: PortfolioItem = {
       symbol: selectedSymbol,
       quantity: Number(quantity),
-      priceARS: asset.c || 0,
+      priceARS: asset.c || asset.px_ask || asset.px_bid || 0,
       priceUSD: priceUSD,
-      type: asset.type
+      type: asset.type || 'stock',
+      c: asset.c
     };
 
     setPortfolio([...portfolio, newItem]);
@@ -140,9 +144,9 @@ export function PortfolioCard({ stocks, bonds, on, mep }: PortfolioCardProps) {
                 <Command 
                   className="bg-gray-900 rounded-lg"
                   shouldFilter={false}
-                  onKeyDown={(e) => {
+                  onKeyDown={(e: React.KeyboardEvent) => {
                     if (e.key === 'Enter') {
-                      const firstMatch = [...stocks, ...bonds, ...on]
+                      const firstMatch = allAssets
                         .find(asset => 
                           !asset.symbol.endsWith('D') && 
                           !asset.symbol.endsWith('C') && 
