@@ -7,6 +7,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ArrowUpDown, Search, Heart } from 'lucide-react'
 import { Button } from "@/components/ui/button"
+import { LineChart, Line, ResponsiveContainer, YAxis, Tooltip } from 'recharts'
+
+type PricePoint = {
+  timestamp: number;
+  price: number;
+}
 
 type MarketData = {
   symbol: string
@@ -19,6 +25,7 @@ type MarketData = {
   q_op?: number
   v?: number
   type: 'stock' | 'bond' | 'on' | 'mep'
+  priceHistory?: PricePoint[]
 }
 
 type MepData = {
@@ -88,6 +95,7 @@ const cleanCurrencyFormat = (value: string): string => {
 type SortableFields = keyof Pick<MarketData, 'symbol' | 'px_bid' | 'px_ask' | 'c' | 'pct_change'>;
 
 export function MarketDashboard() {
+  const [priceHistories, setPriceHistories] = useState<Record<string, PricePoint[]>>({})
   const [stocks, setStocks] = useState<MarketData[]>([])
   const [bonds, setBonds] = useState<MarketData[]>([])
   const [ons, setOns] = useState<MarketData[]>([])
@@ -112,6 +120,43 @@ export function MarketDashboard() {
       setFavorites(JSON.parse(savedFavorites))
     }
   }, [])
+
+  const updatePriceHistory = useCallback((symbol: string, price: number) => {
+    // Solo actualizar el historial si el mercado está abierto
+    if (!isMarketOpen()) {
+      setPriceHistories(prev => {
+        // Si no hay historial previo, crear uno con el precio actual
+        if (!prev[symbol]) {
+          const now = Date.now();
+          const points = Array.from({ length: 30 }, (_, i) => ({
+            timestamp: now - (29 - i) * 60000, // Un punto por minuto
+            price: price
+          }));
+          return { ...prev, [symbol]: points };
+        }
+        return prev;
+      });
+      return;
+    }
+
+    setPriceHistories(prev => {
+      const history = prev[symbol] || [];
+      const now = Date.now();
+      
+      // Si es el primer punto o el precio cambió, agregar al historial
+      if (history.length === 0 || history[history.length - 1].price !== price) {
+        const newHistory = [
+          ...history,
+          { timestamp: now, price }
+        ].slice(-30); // Mantener solo los últimos 30 puntos
+        return {
+          ...prev,
+          [symbol]: newHistory
+        };
+      }
+      return prev;
+    });
+  }, []);
 
   const fetchData = useCallback(async () => {
     try {
@@ -141,6 +186,18 @@ export function MarketDashboard() {
         mepRes.json()
       ])
 
+      stocksData.forEach((item: MarketData) => {
+        if (item.c) updatePriceHistory(item.symbol, item.c)
+      })
+
+      bondsData.forEach((item: MarketData) => {
+        if (item.c) updatePriceHistory(item.symbol, item.c)
+      })
+
+      onsData.forEach((item: MarketData) => {
+        if (item.c) updatePriceHistory(item.symbol, item.c)
+      })
+
       setStocks(stocksData.map((item: MarketData) => ({ ...item, type: 'stock' })))
       setBonds(bondsData.map((item: MarketData) => ({ ...item, type: 'bond' })))
       setOns(onsData.map((item: MarketData) => ({ ...item, type: 'on' })))
@@ -149,49 +206,52 @@ export function MarketDashboard() {
     } catch (error) {
       console.error('Error fetching data:', error)
     }
-  }, [])
+  }, [updatePriceHistory])
 
   useEffect(() => {
     fetchData() // Initial fetch
-
-    // Set up auto-refresh every 20 seconds
-    const intervalId = setInterval(fetchData, 20000)
     
-    return () => clearInterval(intervalId)
-  }, [fetchData])
+    const interval = setInterval(() => {
+      const marketOpen = isMarketOpen();
+      
+      if (marketOpen) {
+        fetchData();
+        setCountdown(20); // Reset countdown only if market is open
+      } else {
+        setCountdown(0); // Set countdown to 0 when market is closed
+      }
+    }, 20000);
 
-  const formatTimeString = useCallback(() => {
+    // Countdown timer
+    const countdownInterval = setInterval(() => {
+      setCountdown(prev => {
+        if (!isMarketOpen()) return 0;
+        return prev > 0 ? prev - 1 : 20;
+      });
+    }, 1000);
+
+    return () => {
+      clearInterval(interval);
+      clearInterval(countdownInterval);
+    }
+  }, [fetchData]);
+
+  const formatTimeString = () => {
     return lastUpdate.toLocaleTimeString('es-AR', {
       hour: '2-digit',
       minute: '2-digit',
       hour12: false,
       timeZone: 'America/Argentina/Buenos_Aires'
-    })
-  }, [lastUpdate])
+    });
+  };
 
   useEffect(() => {
     const timer = setInterval(() => {
-      setCountdown(prev => {
-        if (prev <= 1) {
-          return 20;
-        }
-        return prev - 1;
-      });
+      setLastUpdate(new Date())
     }, 1000);
 
     return () => clearInterval(timer);
   }, []);
-
-  useEffect(() => {
-    const updateTime = () => {
-      setLastUpdate(new Date())
-    }
-
-    updateTime() // Actualización inicial
-    const intervalId = setInterval(updateTime, 1000)
-
-    return () => clearInterval(intervalId)
-  }, [])
 
   const toggleFavorite = useCallback((id: string, type: 'stock' | 'bond' | 'on' | 'mep') => {
     setFavorites(prev => {
@@ -278,9 +338,21 @@ export function MarketDashboard() {
     }));
   }
 
+  const isMarketOpen = () => {
+    const now = new Date()
+    const hours = now.getHours()
+    const minutes = now.getMinutes()
+    const currentTime = hours * 100 + minutes
+
+    // Mercado abierto de 11:00 a 17:00
+    return currentTime >= 1100 && currentTime <= 1700
+  }
+
   const MarketCard = ({ item }: { item: MarketData }) => {
     const spreadValue = (item.px_ask || 0) - (item.px_bid || 0);
     const spreadPercentage = (spreadValue / ((item.px_ask || 0) + (item.px_bid || 0)) / 2) * 100;
+    const priceHistory = priceHistories[item.symbol] || [];
+    const marketOpen = isMarketOpen();
     
     return (
       <Card className="overflow-hidden bg-gray-900 border-gray-700">
@@ -288,6 +360,9 @@ export function MarketDashboard() {
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
               <h2 className="text-2xl font-bold text-white">{item.symbol}</h2>
+              <span className={`text-xs px-2 py-1 rounded ${marketOpen ? 'bg-green-900 text-green-300' : 'bg-gray-800 text-gray-400'}`}>
+                {marketOpen ? 'En operación' : 'Cerrado'}
+              </span>
             </div>
             <Button
               variant="ghost"
@@ -298,58 +373,79 @@ export function MarketDashboard() {
               <Heart className={`h-5 w-5 ${isFavorite(item.symbol, item.type as 'stock' | 'bond' | 'on') ? 'fill-current' : ''}`} />
             </Button>
           </div>
-          <div className="grid grid-cols-1 gap-2">
-            <div className="flex justify-between items-center">
-              <div className="text-sm text-gray-400">Compra:</div>
-              <div className="text-sm font-semibold text-white">${formatNumber(item.px_bid || 0)}</div>
-            </div>
-            <div className="flex justify-between items-center">
-              <div className="text-sm text-gray-400">Venta:</div>
-              <div className="text-sm font-semibold text-white">${formatNumber(item.px_ask || 0)}</div>
-            </div>
-            {item.q_bid && item.q_ask && (
-              <>
-                <div className="flex justify-between items-center">
-                  <div className="text-sm text-gray-400">Cantidad Compra:</div>
-                  <div className="text-sm font-semibold text-white">{formatNumber(item.q_bid)}</div>
-                </div>
-                <div className="flex justify-between items-center">
-                  <div className="text-sm text-gray-400">Cantidad Venta:</div>
-                  <div className="text-sm font-semibold text-white">{formatNumber(item.q_ask)}</div>
-                </div>
-              </>
-            )}
-            <div className="flex justify-between items-center text-xs text-gray-500">
-              <div>Spread:</div>
-              <div>
-                ${formatNumber(spreadValue)} ({formatPercentage(spreadPercentage)})
+          
+          <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-2">
+              <div className="flex justify-between">
+                <span className="text-gray-400">Compra</span>
+                <span className="text-white">{item.px_bid ? formatCurrency(item.px_bid, 'ARS') : '-'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-400">Venta</span>
+                <span className="text-white">{item.px_ask ? formatCurrency(item.px_ask, 'ARS') : '-'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-400">Último</span>
+                <span className="text-white">{item.c ? formatCurrency(item.c, 'ARS') : '-'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-400">Variación</span>
+                <span className={item.pct_change && item.pct_change > 0 ? 'text-green-500' : 'text-red-500'}>
+                  {item.pct_change ? formatPercentage(item.pct_change) : '-'}
+                </span>
               </div>
             </div>
-            <div className="mt-2 pt-2 border-t border-gray-700">
-              <div className="flex justify-between items-center">
-                <div className="text-sm text-gray-400">Último:</div>
-                <div className="text-sm font-semibold text-white">${formatNumber(item.c || 0)}</div>
-              </div>
-              {item.v && (
-                <div className="flex justify-between items-center">
-                  <div className="text-sm text-gray-400">Volumen:</div>
-                  <div className="text-sm font-semibold text-white">{formatNumber(item.v)}</div>
-                </div>
-              )}
-              {item.q_op && (
-                <div className="flex justify-between items-center">
-                  <div className="text-sm text-gray-400">Operaciones:</div>
-                  <div className="text-sm font-semibold text-white">{formatNumber(item.q_op)}</div>
-                </div>
-              )}
-              {item.pct_change !== undefined && (
-                <div className="flex justify-between items-center">
-                  <div className="text-sm text-gray-400">Variación:</div>
-                  <div className={`text-sm font-semibold ${item.pct_change >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                    {formatPercentage(item.pct_change)}
+            
+            <div className="h-[100px] w-full relative">
+              {!marketOpen && (
+                <div className="absolute inset-0 flex items-center justify-center bg-gray-900/80 z-10">
+                  <div className="text-center">
+                    <span className="text-xs text-gray-400 block">Mercado Cerrado</span>
+                    <span className="text-xs text-gray-500 block mt-1">Último precio: {formatCurrency(item.c || 0, 'ARS')}</span>
                   </div>
                 </div>
               )}
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={priceHistory}>
+                  <YAxis 
+                    domain={['dataMin', 'dataMax']}
+                    hide={true}
+                  />
+                  <Tooltip
+                    contentStyle={{ 
+                      backgroundColor: '#1f2937',
+                      border: 'none',
+                      borderRadius: '0.375rem',
+                      color: '#fff'
+                    }}
+                    formatter={(value: number) => [formatCurrency(value, 'ARS'), 'Precio']}
+                    labelFormatter={(timestamp: number) => {
+                      const date = new Date(timestamp);
+                      return `${date.toLocaleTimeString()} ${marketOpen ? '' : '(Cierre)'}`;
+                    }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="price"
+                    stroke={item.pct_change && item.pct_change > 0 ? '#10b981' : '#ef4444'}
+                    dot={false}
+                    strokeWidth={2}
+                    animationDuration={1000}
+                    isAnimationActive={marketOpen}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            <div className="flex justify-between">
+              <span className="text-gray-400">Spread</span>
+              <span className="text-white">{formatCurrency(spreadValue, 'ARS')}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-400">Spread %</span>
+              <span className="text-white">{formatPercentage(spreadPercentage)}</span>
             </div>
           </div>
         </CardContent>
@@ -424,6 +520,63 @@ export function MarketDashboard() {
   return (
     <div className="min-h-screen bg-black text-white">
       <div className="container mx-auto p-4">
+        <div className="flex flex-col sm:flex-row gap-4 mb-4">
+          <div className="relative flex-grow">
+            <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400" />
+            <Input
+              type="text"
+              placeholder="Buscar..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-8 bg-gray-800 border-gray-700 text-white placeholder-gray-400"
+            />
+          </div>
+          <Select
+            value={sortBy}
+            onValueChange={(value) => setSortBy(value as SortableFields)}
+          >
+            <SelectTrigger className="w-[180px] bg-gray-800 border-gray-700 text-white">
+              <SelectValue placeholder="Ordenar por..." />
+            </SelectTrigger>
+            <SelectContent className="bg-gray-800 border-gray-700">
+              <SelectItem value="symbol" className="text-white hover:bg-gray-700">Símbolo</SelectItem>
+              <SelectItem value="px_bid" className="text-white hover:bg-gray-700">Precio Compra</SelectItem>
+              <SelectItem value="px_ask" className="text-white hover:bg-gray-700">Precio Venta</SelectItem>
+              <SelectItem value="c" className="text-white hover:bg-gray-700">Último</SelectItem>
+              <SelectItem value="pct_change" className="text-white hover:bg-gray-700">Variación</SelectItem>
+            </SelectContent>
+          </Select>
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={handleSortOrderChange}
+            className="bg-gray-800 border-gray-700 text-white hover:bg-gray-700"
+          >
+            <ArrowUpDown className="h-4 w-4" />
+          </Button>
+        </div>
+
+        <div className="flex items-center justify-between mt-4 mb-6">
+          <div className="flex items-center gap-2">
+            {isMarketOpen() ? (
+              <>
+                <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse"></div>
+                <span className="text-green-400 font-semibold">Mercado Abierto</span>
+                <span className="text-gray-400 ml-2">
+                  {formatTimeString()} • {countdown}s
+                </span>
+              </>
+            ) : (
+              <>
+                <div className="h-2 w-2 rounded-full bg-red-500"></div>
+                <span className="text-red-400 font-semibold tracking-wide uppercase text-sm">
+                  Mercado Cerrado
+                </span>
+              </>
+            )}
+          </div>
+        </div>
+
         <Tabs defaultValue="stocks" className="w-full">
           <TabsList className="bg-gray-800 p-1 mb-4">
             <TabsTrigger 
@@ -463,46 +616,6 @@ export function MarketDashboard() {
               Favoritos
             </TabsTrigger>
           </TabsList>
-
-          <div className="flex flex-col sm:flex-row gap-4 mb-4">
-            <div className="relative flex-grow">
-              <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400" />
-              <Input
-                type="text"
-                placeholder="Buscar..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-8 bg-gray-800 border-gray-700 text-white placeholder-gray-400"
-              />
-            </div>
-            <Select
-              value={sortBy}
-              onValueChange={(value) => setSortBy(value as SortableFields)}
-            >
-              <SelectTrigger className="w-[180px] bg-gray-800 border-gray-700 text-white">
-                <SelectValue placeholder="Ordenar por..." />
-              </SelectTrigger>
-              <SelectContent className="bg-gray-800 border-gray-700">
-                <SelectItem value="symbol" className="text-white hover:bg-gray-700">Símbolo</SelectItem>
-                <SelectItem value="px_bid" className="text-white hover:bg-gray-700">Precio Compra</SelectItem>
-                <SelectItem value="px_ask" className="text-white hover:bg-gray-700">Precio Venta</SelectItem>
-                <SelectItem value="c" className="text-white hover:bg-gray-700">Último</SelectItem>
-                <SelectItem value="pct_change" className="text-white hover:bg-gray-700">Variación</SelectItem>
-              </SelectContent>
-            </Select>
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={handleSortOrderChange}
-              className="bg-gray-800 border-gray-700 text-white hover:bg-gray-700"
-            >
-              <ArrowUpDown className="h-4 w-4" />
-            </Button>
-          </div>
-
-          <div className="text-sm text-gray-400 mt-2">
-            Última actualización: {formatTimeString()} ({countdown}s para actualizar)
-          </div>
 
           <TabsContent value="stocks">
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
