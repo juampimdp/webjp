@@ -70,8 +70,8 @@ const formatCurrency = (value: number, currency: 'ARS' | 'USD') => {
 };
 
 const formatInputCurrency = (value: string): string => {
-  const number = value.replace(/\D/g, '');
-  const numberValue = Number(number);
+  const cleanNumber = value.replace(/\D/g, '');
+  const numberValue = Number(cleanNumber);
   if (isNaN(numberValue)) return '';
   return new Intl.NumberFormat('es-AR', {
     style: 'currency',
@@ -213,7 +213,7 @@ export function MarketDashboard() {
     return favorites.some(f => f.id === id && f.type === type)
   }, [favorites])
 
-  const toggleSortOrder = useCallback(() => {
+  const handleSortOrderChange = useCallback(() => {
     setSortOrder(prevOrder => prevOrder === 'asc' ? 'desc' : 'asc')
   }, [])
 
@@ -493,7 +493,7 @@ export function MarketDashboard() {
             <Button
               variant="outline"
               size="icon"
-              onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
+              onClick={handleSortOrderChange}
               className="bg-gray-800 border-gray-700 text-white hover:bg-gray-700"
             >
               <ArrowUpDown className="h-4 w-4" />
