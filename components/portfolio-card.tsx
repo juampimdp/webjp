@@ -26,18 +26,14 @@ interface BaseAsset {
   c?: number;
 }
 
-// Assets que usan symbol (stocks, bonds, ONs)
 interface SymbolAsset extends BaseAsset {
   type: 'stock' | 'bond' | 'on';
-  symbol: string;
-  ticker?: never;
+  symbol: string;  
 }
 
-// Assets que usan ticker (MEP)
 interface TickerAsset extends BaseAsset {
   type: 'mep';
-  ticker: string;
-  symbol?: never;
+  ticker: string;  
 }
 
 type Asset = SymbolAsset | TickerAsset;
@@ -57,8 +53,8 @@ interface Totals {
 }
 
 interface PortfolioCardProps {
-  stocks: SymbolAsset[];  
-  bonds: SymbolAsset[];   
+  stocks: SymbolAsset[];
+  bonds: SymbolAsset[];
   on: SymbolAsset[];
   mep: TickerAsset[];
 }
@@ -70,27 +66,51 @@ export function PortfolioCard({ stocks, bonds, on, mep }: PortfolioCardProps) {
   const [portfolio, setPortfolio] = React.useState<PortfolioItem[]>([]);
   const [quantity, setQuantity] = React.useState<string>("");
 
-  // Combinar todos los activos en una lista
   const allAssets: Asset[] = [
-    ...stocks,  
+    ...stocks,
     ...bonds,
     ...on,
     ...mep
   ];
 
+  const getAssetIdentifier = (asset: Asset): string => {
+    return asset.type === 'mep' ? asset.ticker : asset.symbol;
+  };
+
+  // Type guard para SymbolAsset
+  const isSymbolAsset = (asset: Asset): asset is SymbolAsset => {
+    return asset.type === 'stock' || asset.type === 'bond' || asset.type === 'on';
+  };
+
+  // Type guard para TickerAsset
+  const isTickerAsset = (asset: Asset): asset is TickerAsset => {
+    return asset.type === 'mep';
+  };
+
+  const shouldExcludeAsset = (identifier: string): boolean => {
+    return identifier.endsWith('D') || identifier.endsWith('C');
+  };
+
+  const matchesSearch = (identifier: string): boolean => {
+    return identifier.toLowerCase().includes(searchValue.toLowerCase());
+  };
+
+  const filterAsset = (asset: Asset): boolean => {
+    const identifier = getAssetIdentifier(asset);
+    if (isSymbolAsset(asset)) {
+      return !shouldExcludeAsset(identifier) && matchesSearch(identifier);
+    }
+    return matchesSearch(identifier);
+  };
+
   const findUSDPrice = (identifier: string): number => {
     if (!identifier || identifier.endsWith('D')) return 0;
     const usdSymbol = identifier + 'D';
     
-    // Buscar en bonos y ONs que usan symbol
     const bondWithUSD = bonds.find(b => b.symbol === usdSymbol);
     const onWithUSD = on.find(o => o.symbol === usdSymbol);
     
     return bondWithUSD?.c || onWithUSD?.c || 0;
-  };
-
-  const getAssetIdentifier = (asset: Asset): string => {
-    return asset.type === 'mep' ? asset.ticker : asset.symbol;
   };
 
   const calculateItemTotal = (item: PortfolioItem): Totals => {
@@ -135,7 +155,7 @@ export function PortfolioCard({ stocks, bonds, on, mep }: PortfolioCardProps) {
       quantity: Number(quantity),
       priceARS: asset.type === 'bond' || asset.type === 'on' ? priceARS / 100 : priceARS,
       priceUSD: asset.type === 'bond' || asset.type === 'on' ? priceUSD / 100 : priceUSD,
-      type: asset.type || 'stock',
+      type: asset.type,
       c: asset.c
     };
 
@@ -176,19 +196,7 @@ export function PortfolioCard({ stocks, bonds, on, mep }: PortfolioCardProps) {
                   shouldFilter={false}
                   onKeyDown={(e: React.KeyboardEvent) => {
                     if (e.key === 'Enter') {
-                      const firstMatch = allAssets
-                        .find(asset => {
-                          const identifier = getAssetIdentifier(asset);
-                          const isSymbolAsset = 'symbol' in asset;
-                          
-                          if (isSymbolAsset) {
-                            return !asset.symbol.endsWith('D') && 
-                                   !asset.symbol.endsWith('C') &&
-                                   identifier.toLowerCase().includes(searchValue.toLowerCase());
-                          }
-                          return identifier.toLowerCase().includes(searchValue.toLowerCase());
-                        });
-
+                      const firstMatch = allAssets.find(filterAsset);
                       if (firstMatch) {
                         setSelectedSymbol(getAssetIdentifier(firstMatch));
                         setOpen(false);
@@ -207,96 +215,72 @@ export function PortfolioCard({ stocks, bonds, on, mep }: PortfolioCardProps) {
                     {/* Acciones */}
                     {stocks.length > 0 && (
                       <CommandGroup heading="Acciones" className="text-gray-300 font-medium">
-                        {stocks
-                          .filter(asset => {
-                            const identifier = getAssetIdentifier(asset);
-                            return identifier.toLowerCase().includes(searchValue.toLowerCase());
-                          })
-                          .map((asset) => (
-                            <button
-                              key={getAssetIdentifier(asset)}
-                              onClick={() => {
-                                setSelectedSymbol(getAssetIdentifier(asset));
-                                setOpen(false);
-                              }}
-                              className="w-full text-left text-white hover:bg-blue-600/50 cursor-pointer rounded px-2 py-1.5 text-sm font-medium data-[state=selected]:bg-blue-600"
-                            >
-                              {getAssetIdentifier(asset)}
-                            </button>
-                          ))}
+                        {stocks.filter(filterAsset).map((asset) => (
+                          <button
+                            key={getAssetIdentifier(asset)}
+                            onClick={() => {
+                              setSelectedSymbol(getAssetIdentifier(asset));
+                              setOpen(false);
+                            }}
+                            className="w-full text-left text-white hover:bg-blue-600/50 cursor-pointer rounded px-2 py-1.5 text-sm font-medium data-[state=selected]:bg-blue-600"
+                          >
+                            {getAssetIdentifier(asset)}
+                          </button>
+                        ))}
                       </CommandGroup>
                     )}
                     
                     {/* Bonos */}
                     {bonds.length > 0 && (
                       <CommandGroup heading="Bonos" className="text-gray-300 font-medium">
-                        {bonds
-                          .filter(asset => {
-                            const identifier = getAssetIdentifier(asset);
-                            return !identifier.endsWith('D') && 
-                                   !identifier.endsWith('C') &&
-                                   identifier.toLowerCase().includes(searchValue.toLowerCase());
-                          })
-                          .map((asset) => (
-                            <button
-                              key={getAssetIdentifier(asset)}
-                              onClick={() => {
-                                setSelectedSymbol(getAssetIdentifier(asset));
-                                setOpen(false);
-                              }}
-                              className="w-full text-left text-white hover:bg-blue-600/50 cursor-pointer rounded px-2 py-1.5 text-sm font-medium data-[state=selected]:bg-blue-600"
-                            >
-                              {getAssetIdentifier(asset)}
-                            </button>
-                          ))}
+                        {bonds.filter(filterAsset).map((asset) => (
+                          <button
+                            key={getAssetIdentifier(asset)}
+                            onClick={() => {
+                              setSelectedSymbol(getAssetIdentifier(asset));
+                              setOpen(false);
+                            }}
+                            className="w-full text-left text-white hover:bg-blue-600/50 cursor-pointer rounded px-2 py-1.5 text-sm font-medium data-[state=selected]:bg-blue-600"
+                          >
+                            {getAssetIdentifier(asset)}
+                          </button>
+                        ))}
                       </CommandGroup>
                     )}
                     
                     {/* ONs */}
                     {on.length > 0 && (
                       <CommandGroup heading="ONs" className="text-gray-300 font-medium">
-                        {on
-                          .filter(asset => {
-                            const identifier = getAssetIdentifier(asset);
-                            return !identifier.endsWith('D') && 
-                                   !identifier.endsWith('C') &&
-                                   identifier.toLowerCase().includes(searchValue.toLowerCase());
-                          })
-                          .map((asset) => (
-                            <button
-                              key={getAssetIdentifier(asset)}
-                              onClick={() => {
-                                setSelectedSymbol(getAssetIdentifier(asset));
-                                setOpen(false);
-                              }}
-                              className="w-full text-left text-white hover:bg-blue-600/50 cursor-pointer rounded px-2 py-1.5 text-sm font-medium data-[state=selected]:bg-blue-600"
-                            >
-                              {getAssetIdentifier(asset)}
-                            </button>
-                          ))}
+                        {on.filter(filterAsset).map((asset) => (
+                          <button
+                            key={getAssetIdentifier(asset)}
+                            onClick={() => {
+                              setSelectedSymbol(getAssetIdentifier(asset));
+                              setOpen(false);
+                            }}
+                            className="w-full text-left text-white hover:bg-blue-600/50 cursor-pointer rounded px-2 py-1.5 text-sm font-medium data-[state=selected]:bg-blue-600"
+                          >
+                            {getAssetIdentifier(asset)}
+                          </button>
+                        ))}
                       </CommandGroup>
                     )}
                     
                     {/* MEP */}
                     {mep.length > 0 && (
                       <CommandGroup heading="MEP" className="text-gray-300 font-medium">
-                        {mep
-                          .filter(asset => {
-                            const identifier = getAssetIdentifier(asset);
-                            return identifier.toLowerCase().includes(searchValue.toLowerCase());
-                          })
-                          .map((asset) => (
-                            <button
-                              key={getAssetIdentifier(asset)}
-                              onClick={() => {
-                                setSelectedSymbol(getAssetIdentifier(asset));
-                                setOpen(false);
-                              }}
-                              className="w-full text-left text-white hover:bg-blue-600/50 cursor-pointer rounded px-2 py-1.5 text-sm font-medium data-[state=selected]:bg-blue-600"
-                            >
-                              {getAssetIdentifier(asset)}
-                            </button>
-                          ))}
+                        {mep.filter(filterAsset).map((asset) => (
+                          <button
+                            key={getAssetIdentifier(asset)}
+                            onClick={() => {
+                              setSelectedSymbol(getAssetIdentifier(asset));
+                              setOpen(false);
+                            }}
+                            className="w-full text-left text-white hover:bg-blue-600/50 cursor-pointer rounded px-2 py-1.5 text-sm font-medium data-[state=selected]:bg-blue-600"
+                          >
+                            {getAssetIdentifier(asset)}
+                          </button>
+                        ))}
                       </CommandGroup>
                     )}
                   </CommandList>
