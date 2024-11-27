@@ -43,12 +43,14 @@ interface BaseAsset {
 
 interface SymbolAsset extends BaseAsset {
   symbol: string;
-  ticker?: never;
+  type: 'stock' | 'bond' | 'on';  
+  ticker?: never;  
 }
 
 interface TickerAsset extends BaseAsset {
   ticker: string;
-  symbol?: never;
+  type: 'mep';  
+  symbol?: never;  
 }
 
 type Asset = SymbolAsset | TickerAsset;
@@ -87,7 +89,10 @@ export function PortfolioCard({ stocks, bonds, on, mep }: PortfolioCardProps) {
   };
 
   const getAssetIdentifier = (asset: Asset): string => {
-    return 'symbol' in asset ? asset.symbol : asset.ticker;
+    if ('symbol' in asset) {
+      return asset.symbol;  
+    }
+    return asset.ticker;    
   };
 
   const calculateItemTotal = (item: PortfolioItem): Totals => {
@@ -178,14 +183,16 @@ export function PortfolioCard({ stocks, bonds, on, mep }: PortfolioCardProps) {
                           const identifier = getAssetIdentifier(asset);
                           const isSymbolAsset = 'symbol' in asset;
                           
-                          return !isSymbolAsset || 
-                                 (!asset.symbol?.endsWith('D') && !asset.symbol?.endsWith('C')) &&
-                                 identifier.toLowerCase().includes(searchValue.toLowerCase());
+                          if (isSymbolAsset) {
+                            return !asset.symbol.endsWith('D') && 
+                                   !asset.symbol.endsWith('C') &&
+                                   identifier.toLowerCase().includes(searchValue.toLowerCase());
+                          }
+                          return identifier.toLowerCase().includes(searchValue.toLowerCase());
                         });
 
                       if (firstMatch) {
-                        const identifier = getAssetIdentifier(firstMatch);
-                        setSelectedSymbol(identifier);
+                        setSelectedSymbol(getAssetIdentifier(firstMatch));
                         setOpen(false);
                       }
                     }
@@ -203,21 +210,20 @@ export function PortfolioCard({ stocks, bonds, on, mep }: PortfolioCardProps) {
                     {stocks.length > 0 && (
                       <CommandGroup heading="Acciones" className="text-gray-300 font-medium">
                         {stocks
-                          .filter(asset => 
-                            'symbol' in asset && 
-                            !asset.symbol.toString().endsWith('D') &&
-                            asset.symbol.toLowerCase().includes(searchValue.toLowerCase())
-                          )
+                          .filter(asset => {
+                            const identifier = getAssetIdentifier(asset);
+                            return identifier.toLowerCase().includes(searchValue.toLowerCase());
+                          })
                           .map((asset) => (
                             <button
-                              key={asset.symbol}
+                              key={getAssetIdentifier(asset)}
                               onClick={() => {
-                                setSelectedSymbol(asset.symbol);
+                                setSelectedSymbol(getAssetIdentifier(asset));
                                 setOpen(false);
                               }}
                               className="w-full text-left text-white hover:bg-blue-600/50 cursor-pointer rounded px-2 py-1.5 text-sm font-medium data-[state=selected]:bg-blue-600"
                             >
-                              {asset.symbol}
+                              {getAssetIdentifier(asset)}
                             </button>
                           ))}
                       </CommandGroup>
@@ -227,22 +233,22 @@ export function PortfolioCard({ stocks, bonds, on, mep }: PortfolioCardProps) {
                     {bonds.length > 0 && (
                       <CommandGroup heading="Bonos" className="text-gray-300 font-medium">
                         {bonds
-                          .filter(asset => 
-                            'symbol' in asset && 
-                            !asset.symbol.toString().endsWith('D') &&
-                            !asset.symbol.toString().endsWith('C') &&
-                            asset.symbol.toLowerCase().includes(searchValue.toLowerCase())
-                          )
+                          .filter(asset => {
+                            const identifier = getAssetIdentifier(asset);
+                            return !identifier.endsWith('D') && 
+                                   !identifier.endsWith('C') &&
+                                   identifier.toLowerCase().includes(searchValue.toLowerCase());
+                          })
                           .map((asset) => (
                             <button
-                              key={asset.symbol}
+                              key={getAssetIdentifier(asset)}
                               onClick={() => {
-                                setSelectedSymbol(asset.symbol);
+                                setSelectedSymbol(getAssetIdentifier(asset));
                                 setOpen(false);
                               }}
                               className="w-full text-left text-white hover:bg-blue-600/50 cursor-pointer rounded px-2 py-1.5 text-sm font-medium data-[state=selected]:bg-blue-600"
                             >
-                              {asset.symbol}
+                              {getAssetIdentifier(asset)}
                             </button>
                           ))}
                       </CommandGroup>
@@ -252,21 +258,22 @@ export function PortfolioCard({ stocks, bonds, on, mep }: PortfolioCardProps) {
                     {on.length > 0 && (
                       <CommandGroup heading="ONs" className="text-gray-300 font-medium">
                         {on
-                          .filter(asset => 
-                            'symbol' in asset && 
-                            !asset.symbol.toString().endsWith('D') &&
-                            asset.symbol.toLowerCase().includes(searchValue.toLowerCase())
-                          )
+                          .filter(asset => {
+                            const identifier = getAssetIdentifier(asset);
+                            return !identifier.endsWith('D') && 
+                                   !identifier.endsWith('C') &&
+                                   identifier.toLowerCase().includes(searchValue.toLowerCase());
+                          })
                           .map((asset) => (
                             <button
-                              key={asset.symbol}
+                              key={getAssetIdentifier(asset)}
                               onClick={() => {
-                                setSelectedSymbol(asset.symbol);
+                                setSelectedSymbol(getAssetIdentifier(asset));
                                 setOpen(false);
                               }}
                               className="w-full text-left text-white hover:bg-blue-600/50 cursor-pointer rounded px-2 py-1.5 text-sm font-medium data-[state=selected]:bg-blue-600"
                             >
-                              {asset.symbol}
+                              {getAssetIdentifier(asset)}
                             </button>
                           ))}
                       </CommandGroup>
@@ -276,23 +283,20 @@ export function PortfolioCard({ stocks, bonds, on, mep }: PortfolioCardProps) {
                     {mep.length > 0 && (
                       <CommandGroup heading="MEP" className="text-gray-300 font-medium">
                         {mep
-                          .filter(asset => 
-                            'ticker' in asset && 
-                            asset.ticker && 
-                            asset.ticker.toLowerCase().includes(searchValue.toLowerCase())
-                          )
+                          .filter(asset => {
+                            const identifier = getAssetIdentifier(asset);
+                            return identifier.toLowerCase().includes(searchValue.toLowerCase());
+                          })
                           .map((asset) => (
                             <button
-                              key={asset.ticker}
+                              key={getAssetIdentifier(asset)}
                               onClick={() => {
-                                if (asset.ticker) {
-                                  setSelectedSymbol(asset.ticker);
-                                  setOpen(false);
-                                }
+                                setSelectedSymbol(getAssetIdentifier(asset));
+                                setOpen(false);
                               }}
                               className="w-full text-left text-white hover:bg-blue-600/50 cursor-pointer rounded px-2 py-1.5 text-sm font-medium data-[state=selected]:bg-blue-600"
                             >
-                              {asset.ticker}
+                              {getAssetIdentifier(asset)}
                             </button>
                           ))}
                       </CommandGroup>
