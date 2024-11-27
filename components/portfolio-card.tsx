@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,8 +7,7 @@ import {
   CommandEmpty,
   CommandGroup,
   CommandInput,
-  CommandItem,
-  CommandList
+  CommandList,
 } from "@/components/ui/command";
 import {
   Popover,
@@ -22,29 +21,42 @@ interface PortfolioItem {
   quantity: number;
   priceARS: number;
   priceUSD: number;
-  type: 'stock' | 'bond' | 'on' | 'mep';
+  type: string;
+}
+
+interface Totals {
+  ars: number;
+  usd: number;
+}
+
+interface Asset {
+  symbol: string;
+  priceARS: number;
+  priceUSD: number;
+  c?: number;
+  type?: 'stock' | 'bond' | 'on' | 'mep';
 }
 
 interface PortfolioCardProps {
-  stocks: any[];
-  bonds: any[];
-  on: any[];
-  mep: any[];
+  stocks: Asset[];
+  bonds: Asset[];
+  on: Asset[];
+  mep: Asset[];
 }
 
 export function PortfolioCard({ stocks, bonds, on, mep }: PortfolioCardProps) {
-  const [portfolio, setPortfolio] = React.useState<PortfolioItem[]>([]);
+  const [open, setOpen] = React.useState(false);
+  const [searchValue, setSearchValue] = React.useState("");
   const [selectedSymbol, setSelectedSymbol] = React.useState<string>("");
+  const [portfolio, setPortfolio] = React.useState<PortfolioItem[]>([]);
   const [quantity, setQuantity] = React.useState<string>("");
-  const [open, setOpen] = React.useState(false)
-  const [searchValue, setSearchValue] = React.useState("")
 
   // Combinar todos los activos en una lista
-  const allAssets = [
-    ...stocks.map(s => ({ ...s, type: 'stock' })),
-    ...bonds.map(b => ({ ...b, type: 'bond' })),
-    ...on.map(o => ({ ...o, type: 'on' })),
-    ...mep.map(m => ({ ...m, type: 'mep' }))
+  const allAssets: Asset[] = [
+    ...stocks.map(s => ({ ...s, type: 'stock' as const })),
+    ...bonds.map(b => ({ ...b, type: 'bond' as const })),
+    ...on.map(o => ({ ...o, type: 'on' as const })),
+    ...mep.map(m => ({ ...m, type: 'mep' as const }))
   ];
 
   const findUSDPrice = (symbol: string): number => {
@@ -56,7 +68,7 @@ export function PortfolioCard({ stocks, bonds, on, mep }: PortfolioCardProps) {
     return usdPrice;
   };
 
-  const calculateItemTotal = (item: PortfolioItem): { ars: number; usd: number } => {
+  const calculateItemTotal = (item: PortfolioItem): Totals => {
     if (item.type === 'bond' || item.type === 'on') {
       return {
         ars: item.quantity * (item.priceARS / 100),
@@ -67,6 +79,16 @@ export function PortfolioCard({ stocks, bonds, on, mep }: PortfolioCardProps) {
       ars: item.quantity * item.priceARS,
       usd: item.quantity * item.priceUSD
     };
+  };
+
+  const calculateTotals = (): Totals => {
+    return portfolio.reduce((acc, item) => {
+      const totals = calculateItemTotal(item);
+      return {
+        ars: acc.ars + totals.ars,
+        usd: acc.usd + totals.usd
+      };
+    }, { ars: 0, usd: 0 });
   };
 
   const addToPortfolio = () => {
@@ -89,24 +111,11 @@ export function PortfolioCard({ stocks, bonds, on, mep }: PortfolioCardProps) {
     setQuantity("");
   };
 
-  const removeFromPortfolio = (symbol: string) => {
+  const removeFromPortfolio = (symbol: string): void => {
     setPortfolio(portfolio.filter(item => item.symbol !== symbol));
   };
 
-  const calculateTotals = () => {
-    return portfolio.reduce(
-      (acc, item) => {
-        const totals = calculateItemTotal(item);
-        return {
-          totalARS: acc.totalARS + totals.ars,
-          totalUSD: acc.totalUSD + totals.usd
-        };
-      },
-      { totalARS: 0, totalUSD: 0 }
-    );
-  };
-
-  const { totalARS, totalUSD } = calculateTotals();
+  const { ars: totalARS, usd: totalUSD } = calculateTotals();
 
   return (
     <Card className="bg-gray-900 text-white max-w-2xl">
