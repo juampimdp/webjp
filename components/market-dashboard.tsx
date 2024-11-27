@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ArrowUpDown, Search, Heart } from 'lucide-react'
 import { Button } from "@/components/ui/button"
 import { LineChart, Line, ResponsiveContainer, YAxis, Tooltip } from 'recharts'
+import { PortfolioCard } from "@/components/portfolio-card";
 
 type PricePoint = {
   timestamp: number;
@@ -610,6 +611,12 @@ export function MarketDashboard() {
               Calculadora MEP
             </TabsTrigger>
             <TabsTrigger 
+              value="portfolio" 
+              className="data-[state=active]:bg-gray-700 data-[state=active]:text-white"
+            >
+              Cartera
+            </TabsTrigger>
+            <TabsTrigger 
               value="favorites" 
               className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground hover:bg-gray-800"
             >
@@ -748,6 +755,15 @@ export function MarketDashboard() {
                 </CardContent>
               </Card>
             </div>
+          </TabsContent>
+
+          <TabsContent value="portfolio">
+            <PortfolioCard 
+              stocks={stocks}
+              bonds={bonds}
+              on={ons}
+              mep={mep}
+            />
           </TabsContent>
 
           <TabsContent value="favorites">

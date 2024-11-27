@@ -16,6 +16,9 @@ const geistMono = localFont({
 export const metadata: Metadata = {
   title: "JP Dashboard",
   description: "Market Dashboard for Financial Assets",
+  icons: {
+    icon: "/favicon.svg"
+  }
 };
 
 export default function RootLayout({
